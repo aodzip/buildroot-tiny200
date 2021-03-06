@@ -1,0 +1,28 @@
+#!/bin/sh
+
+#
+# Minimal pg_config implementation as replacement for the native pg_config application
+# Only implements --includedir and --libdir
+#
+
+prefix=/usr
+
+case "$1" in
+  --includedir)
+	echo "$prefix/include"
+	;;
+  --includedir-server)
+	echo "$prefix/include/postgresql/server"
+	;;
+  --libdir)
+	echo "$prefix/lib"
+	;;
+  --version)
+	echo "PostgreSQL @POSTGRESQL_VERSION@"
+	;;
+  --configure)
+	echo "@POSTGRESQL_CONF_OPTIONS@"
+	;;
+  *)
+	echo "Usage: $0 {--includedir|--includedir-server|--libdir|--version|--configure}"
+esac

@@ -1,0 +1,57 @@
+#!/bin/sh
+#
+# Start uMTPrd....
+#
+
+start() {
+    printf "Starting uMTPrd: "
+    mount none /sys/kernel/config -t configfs
+    mkdir /sys/kernel/config/usb_gadget/g1
+    cd /sys/kernel/config/usb_gadget/g1
+    mkdir configs/c.1
+    mkdir functions/ffs.mtp
+    mkdir strings/0x409
+    mkdir configs/c.1/strings/0x409
+
+    echo 0x0100 > idProduct
+    echo 0x1D6B > idVendor
+
+    echo "Widora" > strings/0x409/manufacturer
+    echo "MangoPi R1" > strings/0x409/product
+
+    echo "Conf 1" > configs/c.1/strings/0x409/configuration
+    echo 120 > configs/c.1/MaxPower
+    ln -s functions/ffs.mtp configs/c.1
+    mkdir /dev/ffs-mtp
+    mount -t functionfs mtp /dev/ffs-mtp
+    start-stop-daemon -S -q -m -b -p /var/run/umtprd.pid -x /usr/sbin/umtprd
+    sleep 1
+    ls /sys/class/udc/ > /sys/kernel/config/usb_gadget/g1/UDC
+    [ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+
+stop() {
+    printf "Stopping uMTPrd: "
+    echo > /sys/kernel/config/usb_gadget/g1/UDC
+    start-stop-daemon -K -q -p /var/run/umtprd.pid -x /usr/sbin/umtprd
+    [ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+
+case "$1" in
+    start)
+    start
+    ;;
+    stop)
+    stop
+    ;;
+    restart|reload)
+    stop
+    sleep 1
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit $?

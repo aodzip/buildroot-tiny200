@@ -1,0 +1,19 @@
+#!/bin/sh
+mount proc /proc -t proc
+set -- $(cat /proc/cmdline)
+umount /proc
+for x in "$@"; do
+    case "$x" in
+        overlayfsdev=*)
+        OVERLAYFSDEV="${x#overlayfsdev=}"
+        mount -n -t jffs2 ${OVERLAYFSDEV} -o rw,noatime /overlay
+        mkdir -p /overlay/rom/lower /overlay/rom/upper /overlay/rom/work
+        mount --rbind / /overlay/rom/lower
+        mount -n -t overlay overlayfs:/overlay/rom -o rw,noatime,lowerdir=/overlay/rom/lower,upperdir=/overlay/rom/upper,workdir=/overlay/rom/work /tmp
+        mount --rbind /dev /tmp/dev/
+        mount --rbind /overlay /tmp/overlay/
+        exec chroot /tmp /sbin/init
+        ;;
+    esac
+done
+exec /sbin/init

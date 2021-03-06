@@ -1,0 +1,48 @@
+/dts-v1/;
+
+/ {
+    description = "Generic Allwinner FIT Image";
+    #address-cells = <1>;
+
+    images {
+        kernel@0 {
+            description = "Linux kernel";
+            data = /incbin/("zImage");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load = <0x80000000>;
+            entry = <0x80000000>;
+
+            hash@0 {
+                algo = "crc32";
+            };
+        };
+
+        fdt@0 {
+            description = "Flattened Device Tree blob";
+            data = /incbin/("devicetree.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+
+            hash@0 {
+                algo = "crc32";
+            };
+        };
+    };
+
+    configurations {
+        default = "conf@0";
+        conf@0 {
+            description = "Kernel, DeviceTree";
+            kernel = "kernel@0";
+            fdt = "fdt@0";
+
+            hash@0 {
+                algo = "crc32";
+            };
+        };
+    };
+};

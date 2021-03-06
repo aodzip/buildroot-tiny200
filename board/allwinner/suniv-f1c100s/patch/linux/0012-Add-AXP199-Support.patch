@@ -1,0 +1,507 @@
+---
+ drivers/input/misc/axp20x-pek.c | 160 ++++++++++++++++++++++++++------
+ drivers/mfd/axp20x-i2c.c        |   2 +
+ drivers/mfd/axp20x.c            | 114 +++++++++++++++++++++++
+ include/linux/mfd/axp20x.h      |  14 +++
+ 4 files changed, 262 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/input/misc/axp20x-pek.c b/drivers/input/misc/axp20x-pek.c
+index 17c1cca74..b3dedd9f4 100644
+--- a/drivers/input/misc/axp20x-pek.c
++++ b/drivers/input/misc/axp20x-pek.c
+@@ -29,11 +29,17 @@
+ #define AXP20X_PEK_STARTUP_MASK		(0xc0)
+ #define AXP20X_PEK_SHUTDOWN_MASK	(0x03)
+ 
++enum axp20x_pek_type {
++	AXP20X_PEK_EDGE,
++	AXP20X_PEK_TIME,
++};
++
+ struct axp20x_info {
+ 	const struct axp20x_time *startup_time;
+ 	unsigned int startup_mask;
+ 	const struct axp20x_time *shutdown_time;
+ 	unsigned int shutdown_mask;
++	int pek_type;
+ };
+ 
+ struct axp20x_pek {
+@@ -42,6 +48,8 @@ struct axp20x_pek {
+ 	struct axp20x_info *info;
+ 	int irq_dbr;
+ 	int irq_dbf;
++	int irq_dbs;
++	int irq_dbl;
+ };
+ 
+ struct axp20x_time {
+@@ -70,11 +78,20 @@ static const struct axp20x_time shutdown_time[] = {
+ 	{ .time = 10000, .idx = 3 },
+ };
+ 
++static const struct axp20x_info axp199_info = {
++	.startup_time = startup_time,
++	.startup_mask = AXP20X_PEK_STARTUP_MASK,
++	.shutdown_time = shutdown_time,
++	.shutdown_mask = AXP20X_PEK_SHUTDOWN_MASK,
++	.pek_type = AXP20X_PEK_TIME,
++};
++
+ static const struct axp20x_info axp20x_info = {
+ 	.startup_time = startup_time,
+ 	.startup_mask = AXP20X_PEK_STARTUP_MASK,
+ 	.shutdown_time = shutdown_time,
+ 	.shutdown_mask = AXP20X_PEK_SHUTDOWN_MASK,
++	.pek_type = AXP20X_PEK_EDGE,
+ };
+ 
+ static const struct axp20x_info axp221_info = {
+@@ -82,6 +99,7 @@ static const struct axp20x_info axp221_info = {
+ 	.startup_mask = AXP20X_PEK_STARTUP_MASK,
+ 	.shutdown_time = shutdown_time,
+ 	.shutdown_mask = AXP20X_PEK_SHUTDOWN_MASK,
++	.pek_type = AXP20X_PEK_EDGE,
+ };
+ 
+ static ssize_t axp20x_show_attr(struct device *dev,
+@@ -211,34 +229,125 @@ static irqreturn_t axp20x_pek_irq(int irq, void *pwr)
+ 	 * The power-button is connected to ground so a falling edge (dbf)
+ 	 * means it is pressed.
+ 	 */
+-	if (irq == axp20x_pek->irq_dbf)
+-		input_report_key(idev, KEY_POWER, true);
+-	else if (irq == axp20x_pek->irq_dbr)
+-		input_report_key(idev, KEY_POWER, false);
++	if (axp20x_pek->info->pek_type == AXP20X_PEK_EDGE) {
++		if (irq == axp20x_pek->irq_dbf)
++			input_report_key(idev, KEY_POWER, true);
++		else if (irq == axp20x_pek->irq_dbr)
++			input_report_key(idev, KEY_POWER, false);
++	} else if (axp20x_pek->info->pek_type == AXP20X_PEK_TIME) {
++		if (irq == axp20x_pek->irq_dbs) {
++			input_report_key(idev, KEY_POWER, true);
++			input_report_key(idev, KEY_POWER, false);
++		} else if (irq == axp20x_pek->irq_dbl) {
++			input_report_key(idev, KEY_POWER2, true);
++			input_report_key(idev, KEY_POWER2, false);
++		}
++	}
+ 
+ 	input_sync(idev);
+ 
+ 	return IRQ_HANDLED;
+ }
+ 
+-static int axp20x_pek_probe_input_device(struct axp20x_pek *axp20x_pek,
+-					 struct platform_device *pdev)
++static int axp20x_pek_get_edge_irq(struct axp20x_pek *axp20x_pek,
++				   struct platform_device *pdev)
+ {
+ 	struct axp20x_dev *axp20x = axp20x_pek->axp20x;
+-	struct input_dev *idev;
+-	int error;
+-
+ 	axp20x_pek->irq_dbr = platform_get_irq_byname(pdev, "PEK_DBR");
+ 	if (axp20x_pek->irq_dbr < 0)
+ 		return axp20x_pek->irq_dbr;
+-	axp20x_pek->irq_dbr = regmap_irq_get_virq(axp20x->regmap_irqc,
+-						  axp20x_pek->irq_dbr);
++	axp20x_pek->irq_dbr =
++		regmap_irq_get_virq(axp20x->regmap_irqc, axp20x_pek->irq_dbr);
+ 
+ 	axp20x_pek->irq_dbf = platform_get_irq_byname(pdev, "PEK_DBF");
+ 	if (axp20x_pek->irq_dbf < 0)
+ 		return axp20x_pek->irq_dbf;
+-	axp20x_pek->irq_dbf = regmap_irq_get_virq(axp20x->regmap_irqc,
+-						  axp20x_pek->irq_dbf);
++	axp20x_pek->irq_dbf =
++		regmap_irq_get_virq(axp20x->regmap_irqc, axp20x_pek->irq_dbf);
++	return 0;
++}
++
++static int axp20x_pek_get_time_irq(struct axp20x_pek *axp20x_pek,
++				   struct platform_device *pdev)
++{
++	struct axp20x_dev *axp20x = axp20x_pek->axp20x;
++	axp20x_pek->irq_dbs = platform_get_irq_byname(pdev, "PEK_DBS");
++	if (axp20x_pek->irq_dbs < 0)
++		return axp20x_pek->irq_dbs;
++	axp20x_pek->irq_dbs =
++		regmap_irq_get_virq(axp20x->regmap_irqc, axp20x_pek->irq_dbs);
++
++	axp20x_pek->irq_dbl = platform_get_irq_byname(pdev, "PEK_DBL");
++	if (axp20x_pek->irq_dbl < 0)
++		return axp20x_pek->irq_dbl;
++	axp20x_pek->irq_dbl =
++		regmap_irq_get_virq(axp20x->regmap_irqc, axp20x_pek->irq_dbl);
++	return 0;
++}
++
++static int axp20x_pek_request_edge_irq(struct axp20x_pek *axp20x_pek,
++				       struct platform_device *pdev)
++{
++	struct input_dev *idev = axp20x_pek->input;
++	int error;
++	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbr,
++					     axp20x_pek_irq, 0,
++					     "axp20x-pek-dbr", idev);
++	if (error < 0) {
++		dev_err(&pdev->dev, "Failed to request dbr IRQ#%d: %d\n",
++			axp20x_pek->irq_dbr, error);
++		return error;
++	}
++	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbf,
++					     axp20x_pek_irq, 0,
++					     "axp20x-pek-dbf", idev);
++	if (error < 0) {
++		dev_err(&pdev->dev, "Failed to request dbf IRQ#%d: %d\n",
++			axp20x_pek->irq_dbf, error);
++		return error;
++	}
++	return 0;
++}
++
++static int axp20x_pek_request_time_irq(struct axp20x_pek *axp20x_pek,
++				       struct platform_device *pdev)
++{
++	struct input_dev *idev = axp20x_pek->input;
++	int error;
++	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbs,
++					     axp20x_pek_irq, 0,
++					     "axp20x-pek-dbs", idev);
++	if (error < 0) {
++		dev_err(&pdev->dev, "Failed to request dbs IRQ#%d: %d\n",
++			axp20x_pek->irq_dbs, error);
++		return error;
++	}
++
++	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbl,
++					     axp20x_pek_irq, 0,
++					     "axp20x-pek-dbl", idev);
++	if (error < 0) {
++		dev_err(&pdev->dev, "Failed to request dbl IRQ#%d: %d\n",
++			axp20x_pek->irq_dbl, error);
++		return error;
++	}
++	return 0;
++}
++
++static int axp20x_pek_probe_input_device(struct axp20x_pek *axp20x_pek,
++					 struct platform_device *pdev)
++{
++	struct input_dev *idev;
++	int error;
++
++	if (axp20x_pek->info->pek_type == AXP20X_PEK_EDGE) {
++		error = axp20x_pek_get_edge_irq(axp20x_pek, pdev);
++	} else if (axp20x_pek->info->pek_type == AXP20X_PEK_TIME) {
++		error = axp20x_pek_get_time_irq(axp20x_pek, pdev);
++	}
++	if (error < 0) {
++		return error;
++	}
+ 
+ 	axp20x_pek->input = devm_input_allocate_device(&pdev->dev);
+ 	if (!axp20x_pek->input)
+@@ -251,24 +360,16 @@ static int axp20x_pek_probe_input_device(struct axp20x_pek *axp20x_pek,
+ 	idev->dev.parent = &pdev->dev;
+ 
+ 	input_set_capability(idev, EV_KEY, KEY_POWER);
++	input_set_capability(idev, EV_KEY, KEY_POWER2);
+ 
+ 	input_set_drvdata(idev, axp20x_pek);
+ 
+-	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbr,
+-					     axp20x_pek_irq, 0,
+-					     "axp20x-pek-dbr", idev);
+-	if (error < 0) {
+-		dev_err(&pdev->dev, "Failed to request dbr IRQ#%d: %d\n",
+-			axp20x_pek->irq_dbr, error);
+-		return error;
++	if (axp20x_pek->info->pek_type == AXP20X_PEK_EDGE) {
++		error = axp20x_pek_request_edge_irq(axp20x_pek, pdev);
++	} else if (axp20x_pek->info->pek_type == AXP20X_PEK_TIME) {
++		error = axp20x_pek_request_time_irq(axp20x_pek, pdev);
+ 	}
+-
+-	error = devm_request_any_context_irq(&pdev->dev, axp20x_pek->irq_dbf,
+-					  axp20x_pek_irq, 0,
+-					  "axp20x-pek-dbf", idev);
+ 	if (error < 0) {
+-		dev_err(&pdev->dev, "Failed to request dbf IRQ#%d: %d\n",
+-			axp20x_pek->irq_dbf, error);
+ 		return error;
+ 	}
+ 
+@@ -338,6 +439,7 @@ static int axp20x_pek_probe(struct platform_device *pdev)
+ 		return -ENOMEM;
+ 
+ 	axp20x_pek->axp20x = dev_get_drvdata(pdev->dev.parent);
++	axp20x_pek->info = (struct axp20x_info *)match->driver_data;
+ 
+ 	if (axp20x_pek_should_register_input(axp20x_pek, pdev)) {
+ 		error = axp20x_pek_probe_input_device(axp20x_pek, pdev);
+@@ -345,8 +447,6 @@ static int axp20x_pek_probe(struct platform_device *pdev)
+ 			return error;
+ 	}
+ 
+-	axp20x_pek->info = (struct axp20x_info *)match->driver_data;
+-
+ 	platform_set_drvdata(pdev, axp20x_pek);
+ 
+ 	return 0;
+@@ -377,6 +477,10 @@ static const struct dev_pm_ops axp20x_pek_pm_ops = {
+ };
+ 
+ static const struct platform_device_id axp_pek_id_match[] = {
++	{
++		.name = "axp199-pek",
++		.driver_data = (kernel_ulong_t)&axp199_info,
++	},
+ 	{
+ 		.name = "axp20x-pek",
+ 		.driver_data = (kernel_ulong_t)&axp20x_info,
+diff --git a/drivers/mfd/axp20x-i2c.c b/drivers/mfd/axp20x-i2c.c
+index 14f9df74f..2cf46ec93 100644
+--- a/drivers/mfd/axp20x-i2c.c
++++ b/drivers/mfd/axp20x-i2c.c
+@@ -59,6 +59,7 @@ static int axp20x_i2c_remove(struct i2c_client *i2c)
+ 
+ static const struct of_device_id axp20x_i2c_of_match[] = {
+ 	{ .compatible = "x-powers,axp152", .data = (void *)AXP152_ID },
++	{ .compatible = "x-powers,axp199", .data = (void *)AXP199_ID },
+ 	{ .compatible = "x-powers,axp202", .data = (void *)AXP202_ID },
+ 	{ .compatible = "x-powers,axp209", .data = (void *)AXP209_ID },
+ 	{ .compatible = "x-powers,axp221", .data = (void *)AXP221_ID },
+@@ -70,6 +71,7 @@ MODULE_DEVICE_TABLE(of, axp20x_i2c_of_match);
+ 
+ static const struct i2c_device_id axp20x_i2c_id[] = {
+ 	{ "axp152", 0 },
++	{ "axp199", 0 },
+ 	{ "axp202", 0 },
+ 	{ "axp209", 0 },
+ 	{ "axp221", 0 },
+diff --git a/drivers/mfd/axp20x.c b/drivers/mfd/axp20x.c
+index aa59496e4..64cb8adc8 100644
+--- a/drivers/mfd/axp20x.c
++++ b/drivers/mfd/axp20x.c
+@@ -34,6 +34,7 @@
+ 
+ static const char * const axp20x_model_names[] = {
+ 	"AXP152",
++	"AXP199",
+ 	"AXP202",
+ 	"AXP209",
+ 	"AXP221",
+@@ -92,6 +93,30 @@ static const struct regmap_access_table axp20x_volatile_table = {
+ 	.n_yes_ranges	= ARRAY_SIZE(axp20x_volatile_ranges),
+ };
+ 
++static const struct regmap_range axp199_writeable_ranges[] = {
++	regmap_reg_range(AXP199_DATACACHE(0), AXP199_IRQ4_STATE),
++	regmap_reg_range(AXP20X_CHRG_CTRL1, AXP20X_CHRG_CTRL2),
++	regmap_reg_range(AXP20X_DCDC_MODE, AXP20X_CC_CTRL),
++};
++
++static const struct regmap_range axp199_volatile_ranges[] = {
++	regmap_reg_range(AXP20X_PWR_INPUT_STATUS, AXP199_USB_OTG_STATUS),
++	regmap_reg_range(AXP20X_CHRG_CTRL1, AXP20X_CHRG_CTRL2),
++	regmap_reg_range(AXP20X_IRQ1_EN, AXP199_IRQ4_STATE),
++	regmap_reg_range(AXP20X_ACIN_V_ADC_H, AXP20X_IPSOUT_V_HIGH_L),
++	regmap_reg_range(AXP20X_GPIO20_SS, AXP20X_GPIO3_CTRL),
++};
++
++static const struct regmap_access_table axp199_writeable_table = {
++	.yes_ranges	= axp199_writeable_ranges,
++	.n_yes_ranges	= ARRAY_SIZE(axp199_writeable_ranges),
++};
++
++static const struct regmap_access_table axp199_volatile_table = {
++	.yes_ranges	= axp199_volatile_ranges,
++	.n_yes_ranges	= ARRAY_SIZE(axp199_volatile_ranges),
++};
++
+ /* AXP22x ranges are shared with the AXP809, as they cover the same range */
+ static const struct regmap_range axp22x_writeable_ranges[] = {
+ 	regmap_reg_range(AXP20X_DATACACHE(0), AXP20X_IRQ5_STATE),
+@@ -172,6 +197,11 @@ static const struct resource axp152_pek_resources[] = {
+ 	DEFINE_RES_IRQ_NAMED(AXP152_IRQ_PEK_FAL_EDGE, "PEK_DBF"),
+ };
+ 
++static const struct resource axp199_pek_resources[] = {
++	DEFINE_RES_IRQ_NAMED(AXP20X_IRQ_PEK_SHORT, "PEK_DBS"),
++	DEFINE_RES_IRQ_NAMED(AXP20X_IRQ_PEK_LONG, "PEK_DBL"),
++};
++
+ static const struct resource axp20x_ac_power_supply_resources[] = {
+ 	DEFINE_RES_IRQ_NAMED(AXP20X_IRQ_ACIN_PLUGIN, "ACIN_PLUGIN"),
+ 	DEFINE_RES_IRQ_NAMED(AXP20X_IRQ_ACIN_REMOVAL, "ACIN_REMOVAL"),
+@@ -244,6 +274,15 @@ static const struct regmap_config axp152_regmap_config = {
+ 	.cache_type	= REGCACHE_RBTREE,
+ };
+ 
++static const struct regmap_config axp199_regmap_config = {
++	.reg_bits	= 8,
++	.val_bits	= 8,
++	.wr_table	= &axp199_writeable_table,
++	.volatile_table	= &axp199_volatile_table,
++	.max_register	= AXP20X_CC_CTRL,
++	.cache_type	= REGCACHE_RBTREE,
++};
++
+ static const struct regmap_config axp20x_regmap_config = {
+ 	.reg_bits	= 8,
+ 	.val_bits	= 8,
+@@ -303,6 +342,39 @@ static const struct regmap_irq axp152_regmap_irqs[] = {
+ 	INIT_REGMAP_IRQ(AXP152, GPIO0_INPUT,		2, 0),
+ };
+ 
++static const struct regmap_irq axp199_regmap_irqs[] = {
++	INIT_REGMAP_IRQ(AXP20X, ACIN_OVER_V,		0, 7),
++	INIT_REGMAP_IRQ(AXP20X, ACIN_PLUGIN,		0, 6),
++	INIT_REGMAP_IRQ(AXP20X, ACIN_REMOVAL,	        0, 5),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_OVER_V,		0, 4),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_PLUGIN,		0, 3),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_REMOVAL,	        0, 2),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_V_LOW,		0, 1),
++	INIT_REGMAP_IRQ(AXP20X, BATT_PLUGIN,		1, 7),
++	INIT_REGMAP_IRQ(AXP20X, BATT_REMOVAL,	        1, 6),
++	INIT_REGMAP_IRQ(AXP20X, BATT_ENT_ACT_MODE,	1, 5),
++	INIT_REGMAP_IRQ(AXP20X, BATT_EXIT_ACT_MODE,	1, 4),
++	INIT_REGMAP_IRQ(AXP20X, CHARG,		        1, 3),
++	INIT_REGMAP_IRQ(AXP20X, CHARG_DONE,		1, 2),
++	INIT_REGMAP_IRQ(AXP20X, BATT_TEMP_HIGH,	        1, 1),
++	INIT_REGMAP_IRQ(AXP20X, BATT_TEMP_LOW,	        1, 0),
++	INIT_REGMAP_IRQ(AXP20X, DIE_TEMP_HIGH,	        2, 7),
++	INIT_REGMAP_IRQ(AXP20X, CHARG_I_LOW,		2, 6),
++	INIT_REGMAP_IRQ(AXP20X, DCDC1_V_LONG,	        2, 5),
++	INIT_REGMAP_IRQ(AXP20X, DCDC2_V_LONG,	        2, 4),
++	INIT_REGMAP_IRQ(AXP20X, DCDC3_V_LONG,	        2, 3),
++	INIT_REGMAP_IRQ(AXP20X, PEK_SHORT,		2, 1),
++	INIT_REGMAP_IRQ(AXP20X, PEK_LONG,		2, 0),
++	INIT_REGMAP_IRQ(AXP20X, N_OE_PWR_ON,		3, 7),
++	INIT_REGMAP_IRQ(AXP20X, N_OE_PWR_OFF,	        3, 6),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_VALID,		3, 5),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_NOT_VALID,	        3, 4),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_SESS_VALID,	3, 3),
++	INIT_REGMAP_IRQ(AXP20X, VBUS_SESS_END,	        3, 2),
++	INIT_REGMAP_IRQ(AXP20X, LOW_PWR_LVL1,	        3, 1),
++	INIT_REGMAP_IRQ(AXP20X, LOW_PWR_LVL2,	        3, 0),
++};
++
+ static const struct regmap_irq axp20x_regmap_irqs[] = {
+ 	INIT_REGMAP_IRQ(AXP20X, ACIN_OVER_V,		0, 7),
+ 	INIT_REGMAP_IRQ(AXP20X, ACIN_PLUGIN,		0, 6),
+@@ -513,6 +585,18 @@ static const struct regmap_irq_chip axp152_regmap_irq_chip = {
+ 	.num_regs		= 3,
+ };
+ 
++static const struct regmap_irq_chip axp199_regmap_irq_chip = {
++	.name			= "axp199_irq_chip",
++	.status_base		= AXP199_IRQ1_STATE,
++	.ack_base		= AXP199_IRQ1_STATE,
++	.mask_base		= AXP199_IRQ1_EN,
++	.mask_invert		= true,
++	.init_ack_masked	= true,
++	.irqs			= axp199_regmap_irqs,
++	.num_irqs		= ARRAY_SIZE(axp199_regmap_irqs),
++	.num_regs		= 4,
++};
++
+ static const struct regmap_irq_chip axp20x_regmap_irq_chip = {
+ 	.name			= "axp20x_irq_chip",
+ 	.status_base		= AXP20X_IRQ1_STATE,
+@@ -587,6 +671,30 @@ static const struct regmap_irq_chip axp809_regmap_irq_chip = {
+ 	.num_regs		= 5,
+ };
+ 
++static const struct mfd_cell axp199_cells[] = {
++	{
++		.name		= "axp199-pek",
++		.num_resources	= ARRAY_SIZE(axp199_pek_resources),
++		.resources	= axp199_pek_resources,
++	}, {
++		.name		= "axp20x-adc",
++		.of_compatible	= "x-powers,axp209-adc",
++	}, {
++		.name		= "axp20x-battery-power-supply",
++		.of_compatible	= "x-powers,axp209-battery-power-supply",
++	}, {
++		.name		= "axp20x-ac-power-supply",
++		.of_compatible	= "x-powers,axp202-ac-power-supply",
++		.num_resources	= ARRAY_SIZE(axp20x_ac_power_supply_resources),
++		.resources	= axp20x_ac_power_supply_resources,
++	}, {
++		.name		= "axp20x-usb-power-supply",
++		.of_compatible	= "x-powers,axp202-usb-power-supply",
++		.num_resources	= ARRAY_SIZE(axp20x_usb_power_supply_resources),
++		.resources	= axp20x_usb_power_supply_resources,
++	},
++};
++
+ static const struct mfd_cell axp20x_cells[] = {
+ 	{
+ 		.name		= "axp20x-gpio",
+@@ -851,6 +959,12 @@ int axp20x_match_device(struct axp20x_dev *axp20x)
+ 		axp20x->regmap_cfg = &axp152_regmap_config;
+ 		axp20x->regmap_irq_chip = &axp152_regmap_irq_chip;
+ 		break;
++	case AXP199_ID:
++		axp20x->nr_cells = ARRAY_SIZE(axp199_cells);
++		axp20x->cells = axp199_cells;
++		axp20x->regmap_cfg = &axp199_regmap_config;
++		axp20x->regmap_irq_chip = &axp199_regmap_irq_chip;
++		break;
+ 	case AXP202_ID:
+ 	case AXP209_ID:
+ 		axp20x->nr_cells = ARRAY_SIZE(axp20x_cells);
+diff --git a/include/linux/mfd/axp20x.h b/include/linux/mfd/axp20x.h
+index fd5957c04..5f6f36914 100644
+--- a/include/linux/mfd/axp20x.h
++++ b/include/linux/mfd/axp20x.h
+@@ -12,6 +12,7 @@
+ 
+ enum axp20x_variants {
+ 	AXP152_ID = 0,
++	AXP199_ID,
+ 	AXP202_ID,
+ 	AXP209_ID,
+ 	AXP221_ID,
+@@ -25,6 +26,7 @@ enum axp20x_variants {
+ };
+ 
+ #define AXP20X_DATACACHE(m)		(0x04 + (m))
++#define AXP199_DATACACHE(m)		(0x06 + (m))
+ 
+ /* Power supply */
+ #define AXP152_PWR_OP_MODE		0x01
+@@ -45,6 +47,9 @@ enum axp20x_variants {
+ #define AXP152_DCDC_FREQ		0x37
+ #define AXP152_DCDC_MODE		0x80
+ 
++#define AXP199_USB_OTG_STATUS	0x04
++#define AXP199_DCDC1_V_OUT		0x26
++
+ #define AXP20X_PWR_INPUT_STATUS		0x00
+ #define AXP20X_PWR_OP_MODE		0x01
+ #define AXP20X_USB_OTG_STATUS		0x02
+@@ -139,6 +144,15 @@ enum axp20x_variants {
+ #define AXP152_IRQ2_STATE		0x49
+ #define AXP152_IRQ3_STATE		0x4a
+ 
++#define AXP199_IRQ1_EN			0x40
++#define AXP199_IRQ2_EN			0x41
++#define AXP199_IRQ3_EN			0x42
++#define AXP199_IRQ4_EN			0x43
++#define AXP199_IRQ1_STATE		0x44
++#define AXP199_IRQ2_STATE		0x45
++#define AXP199_IRQ3_STATE		0x46
++#define AXP199_IRQ4_STATE		0x47
++
+ #define AXP20X_IRQ1_EN			0x40
+ #define AXP20X_IRQ2_EN			0x41
+ #define AXP20X_IRQ3_EN			0x42
+-- 
+2.17.1
+

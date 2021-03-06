@@ -1,0 +1,66 @@
+---
+ drivers/mtd/nand/spi/core.c    | 10 +++++++---
+ drivers/mtd/nand/spi/winbond.c | 12 +++++++++---
+ 2 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/mtd/nand/spi/core.c b/drivers/mtd/nand/spi/core.c
+index ef4a87626..7ea31890f 100644
+--- a/drivers/mtd/nand/spi/core.c
++++ b/drivers/mtd/nand/spi/core.c
+@@ -304,6 +304,10 @@ static int spinand_write_to_cache_op(struct spinand_device *spinand,
+ 
+ 	wdesc = spinand->dirmaps[req->pos.plane].wdesc;
+ 
++	/* Workaround for some stupid chips which write full zero ecc when write to non-ECC OOB */
++	if(!req->datalen)
++		spinand_ecc_enable(spinand, false);
++
+ 	while (nbytes) {
+ 		ret = spi_mem_dirmap_write(wdesc, column, nbytes, buf);
+ 		if (ret < 0)
+@@ -584,8 +588,8 @@ static bool spinand_isbad(struct nand_device *nand, const struct nand_pos *pos)
+ 
+ 	spinand->eccinfo.ooblayout->free(&spinand->base.mtd, 0, &region);
+ 
+-	for(i = 0 ; i < req.ooblen && i < region.offset; i++){
+-		if (spinand->oobbuf[i] != 0xff)
++	for(i = 0 ; i < sizeof(marker) && i < region.offset; i++){
++		if (marker[i] != 0xff)
+ 			return true;
+ 	}
+ 
+@@ -630,7 +634,7 @@ static int spinand_markbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		return ret;
+ 
+ 	spinand->eccinfo.ooblayout->free(&spinand->base.mtd, 0, &region);
+-	req.ooblen = region.offset < req.ooblen ? region.offset : req.ooblen;
++	req.ooblen = region.offset < sizeof(marker) ? region.offset : sizeof(marker);
+ 
+ 	return spinand_write_page(spinand, &req);
+ }
+diff --git a/drivers/mtd/nand/spi/winbond.c b/drivers/mtd/nand/spi/winbond.c
+index a6c17e0ca..4f09f3a57 100644
+--- a/drivers/mtd/nand/spi/winbond.c
++++ b/drivers/mtd/nand/spi/winbond.c
+@@ -49,9 +49,15 @@ static int w25m02gv_ooblayout_free(struct mtd_info *mtd, int section,
+ 	if (section > 3)
+ 		return -ERANGE;
+ 
+-	region->offset = (16 * section) + 2;
+-	region->length = 6;
+-
++	/* Only use non-ECC OOB */
++	if (section) {
++		region->offset = 16 * section;
++		region->length = 4;
++	} else {
++		/* section 0 has two byte reserved for bad block mark */
++		region->offset = 2;
++		region->length = 2;
++	}
+ 	return 0;
+ }
+ 
+-- 
+2.17.1
+

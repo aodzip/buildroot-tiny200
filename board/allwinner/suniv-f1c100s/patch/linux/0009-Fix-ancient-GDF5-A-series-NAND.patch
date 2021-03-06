@@ -1,0 +1,27 @@
+---
+ drivers/mtd/nand/spi/gigadevice.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mtd/nand/spi/gigadevice.c b/drivers/mtd/nand/spi/gigadevice.c
+index e99d425aa..81e76a790 100644
+--- a/drivers/mtd/nand/spi/gigadevice.c
++++ b/drivers/mtd/nand/spi/gigadevice.c
+@@ -249,13 +249,14 @@ static int gigadevice_spinand_detect(struct spinand_device *spinand)
+ 	int ret;
+ 
+ 	/*
++	 * Ancient GDF5 A-series retrun 0xFF in id[0]
+ 	 * Earlier GDF5-series devices (A,E) return [0][MID][DID]
+ 	 * Later (F) devices return [MID][DID1][DID2]
+ 	 */
+ 
+ 	if (id[0] == SPINAND_MFR_GIGADEVICE)
+ 		did = (id[1] << 8) + id[2];
+-	else if (id[0] == 0 && id[1] == SPINAND_MFR_GIGADEVICE)
++	else if ((id[0] == 0 || id[0] == 0xff) && id[1] == SPINAND_MFR_GIGADEVICE)
+ 		did = id[2];
+ 	else
+ 		return 0;
+-- 
+2.17.1
+

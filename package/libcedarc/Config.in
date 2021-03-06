@@ -1,0 +1,106 @@
+menuconfig BR2_PACKAGE_LIBCEDARC
+	bool "libcedarc"
+	help
+		Allwinner Cedar Video Engine Library
+
+if BR2_PACKAGE_LIBCEDARC
+
+config BR2_PACKAGE_LIBCEDARC_ARCHLIB
+	string "Arch library select"
+	default "arm-linux-gnueabihf"
+	help
+		akk44_32
+		anou70_32
+		alp50_32
+		alp50_64
+		amm60_32
+		amm60_64
+		aore80_32
+		arm-none-linux-gnueabi
+		arm-linux-gnueabi
+		arm-linux-gnueabihf
+		toolchain-sunxi-arm-glibc
+		toolchain-sunxi-arm-musl
+		toolchain-sunxi-aarch64-glibc
+		toolchain-sunxi-aarch64-musl
+		toolchain-sunxi-arm9-glibc
+		toolchain-sunxi-arm9-musl
+
+config BR2_PACKAGE_LIBCEDARC_ENCODER
+	bool "Encoder support"
+	default y
+	help
+		Enable MJPEG / H.264 / H.265 encoder
+
+menuconfig BR2_PACKAGE_LIBCEDARC_DECODER
+	bool "Decoder support"
+	help
+		Allwinner Cedar Video Engine Decoder library
+
+if BR2_PACKAGE_LIBCEDARC_DECODER
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_AVS
+	bool "AVS support"
+	default y
+	help
+		Enable AVS decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_H264
+	bool "H.264 support"
+	default y
+	help
+		Enable H.264 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_H265
+	bool "H.265 support"
+	default y
+	help
+		Enable H.265 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_MJPEG
+	bool "MJPEG support"
+	default y
+	help
+		Enable MJPEG decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_MPEG2
+	bool "MPEG2 support"
+	default y
+	help
+		Enable MPEG2 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_MPEG4
+	bool "MPEG4 support"
+	default y
+	help
+		Enable MPEG4 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_VP8
+	bool "VP8 support"
+	default y
+	help
+		Enable VP8 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_VP9
+	bool "VP9 support"
+	default y
+	help
+		Enable VP9 decoder
+
+config BR2_PACKAGE_LIBCEDARC_DECODER_WMV3
+	bool "WMV3 support"
+	default y
+	help
+		Enable WMV3 decoder
+
+endif
+
+comment "OpenMax required both encoder & decoder support"
+
+config BR2_PACKAGE_LIBCEDARC_OPENMAX
+	bool "OpenMax framework support"
+	depends on BR2_PACKAGE_LIBCEDARC_DECODER && BR2_PACKAGE_LIBCEDARC_ENCODER
+	help
+		Enable OpenMax framework
+
+endif
