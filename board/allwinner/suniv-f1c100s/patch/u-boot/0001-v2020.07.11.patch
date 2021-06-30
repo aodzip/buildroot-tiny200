@@ -554,7 +554,7 @@ index ee387127f3..5ecdf58bd5 100644
  #define APB2_RESET_UART_SHIFT		(16)
  #define APB2_RESET_UART_MASK		(0xff << APB2_RESET_UART_SHIFT)
 diff --git a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
-index 02ce73954d..75c0018ea9 100644
+index 02ce73954d..12b22c4774 100644
 --- a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
 +++ b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
 @@ -42,7 +42,11 @@
@@ -577,7 +577,7 @@ index 02ce73954d..75c0018ea9 100644
 +
 +#ifdef CONFIG_MACH_SUNIV
 +#define SUNXI_PWM_BASE			0x01c21000
-+#elif ndef CONFIG_SUNXI_GEN_SUN6I
++#elif !defined CONFIG_SUNXI_GEN_SUN6I
  #define SUNXI_PWM_BASE			0x01c20e00
  #endif
 +#ifndef CONFIG_MACH_SUNIV
