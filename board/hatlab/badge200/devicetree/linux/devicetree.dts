@@ -1,0 +1,318 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR X11)
+
+/dts-v1/;
+#include "suniv-f1c100s.dtsi"
+#include "dt-bindings/input/input.h"
+
+/ {
+	model = "HatLab BADGE200";
+	compatible = "allwinner,suniv-f1c200s",
+			 "allwinner,suniv-f1c100s";
+
+	chosen {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		bootargs = "console=ttyS0,115200 rootwait init=/preinit root=/dev/mtdblock2 rootfstype=squashfs";
+	};
+
+	panel: panel {
+		compatible = "bananapi,s070wv20-ct16", "simple-panel";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			panel_input: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&tcon0_out_lcd>;
+			};
+		};
+	};
+};
+
+&reg_usb0_vbus {
+	compatible = "regulator-fixed";
+	regulator-name = "usb0_vbus";
+	regulator-min-microvolt = <5000000>;
+	regulator-max-microvolt = <5000000>;
+	gpio = <&aw9523b 9 GPIO_ACTIVE_HIGH>;
+	startup-delay-us = <300>;
+	enable-active-high;
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+
+	spi-nand@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "u-boot";
+				reg = <0x000000 0x100000>;
+				read-only;
+			};
+
+			partition@1 {
+				label = "kernel";
+				reg = <0x100000 0x500000>;
+				read-only;
+			};
+
+			partition@2 {
+				label = "rom";
+				reg = <0x600000 0x2a00000>;
+				read-only;
+			};
+
+			partition@3 {
+				label = "vendor";
+				reg = <0x3000000 0x1000000>;
+			};
+
+			partition@4 {
+				label = "overlay";
+				reg = <0x4000000 0x3000000>;
+			};
+		};
+	};
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_pe_pins>;
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_pa_pins>, <&uart1_pa_rcts_pins>;
+	uart-has-rtscts;
+	status = "okay";
+
+	btbcm: bluetooth {
+		compatible = "brcm,bcm20702a1";
+		max-speed = <115200>;
+		device-wakeup-gpios = <&aw9523b 15 GPIO_ACTIVE_HIGH>;
+		host-wakeup-gpios = <&aw9523b 14 GPIO_ACTIVE_HIGH>;
+		shutdown-gpios = <&aw9523b 13 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_pe_pins>;
+	status = "okay";
+};
+
+&mmc0 {
+	status = "okay";
+	broken-cd;
+};
+
+&otg_sram {
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&usbphy {
+	usb0_id_det-gpio = <&aw9523b 12 GPIO_ACTIVE_HIGH>;
+	usb0_vbus-supply = <&reg_usb0_vbus>;
+	status = "okay";
+};
+
+&cedar_ve {
+	status = "okay";
+};
+
+&ion {
+	status = "okay";
+};
+
+&de {
+	status = "okay";
+};
+
+&fe0 {
+	status = "okay";
+};
+
+&be0 {
+	status = "okay";
+};
+
+&tcon0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd_rgb565_pins>;
+	status = "okay";
+};
+
+&tcon0_out {
+	tcon0_out_lcd: endpoint@0 {
+		reg = <0>;
+		remote-endpoint = <&panel_input>;
+	};
+};
+
+&codec {
+	allwinner,audio-routing =
+		"Headphone", "HP",
+		"Headphone", "HPCOM",
+		"LINEIN", "Line In",
+		"FMINL", "Left FM In",
+		"FMINR", "Right FM In",
+		"MIC", "Mic";
+	status = "okay";
+};
+
+&pio {
+	aw9523b_pins: aw9523b-pins {
+		pins = "PE12";
+		function = "gpio_in";
+		bias-pull-up;
+	};
+};
+
+&i2c0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c0_pd_pins>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	rtc0: pcf8563@51 {
+		compatible = "nxp,pcf8563";
+		reg = <0x51>;
+	};
+
+	aw9523b: gpio-expander@5b {
+		compatible = "awinic,aw9523b-gpio";
+		reg = <0x58>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&aw9523b_pins>;
+		interrupt-parent = <&pio>;
+		interrupts = <4 12 IRQ_TYPE_LEVEL_LOW>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		wakeup-source;
+	};
+
+	axp199: pmic@34 {
+		compatible = "x-powers,axp199";
+		reg = <0x34>;
+		interrupt-parent = <&aw9523b>;
+		interrupts = <8 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		status = "okay";
+
+		axp_adc: adc {
+			compatible = "x-powers,axp209-adc";
+			#io-channel-cells = <1>;
+		};
+
+		ac_power_supply: ac-power-supply {
+			compatible = "x-powers,axp202-ac-power-supply";
+		};
+
+		battery_power_supply: battery-power-supply {
+			compatible = "x-powers,axp209-battery-power-supply";
+		};
+
+		usb_power_supply: usb-power-supply {
+			compatible = "x-powers,axp202-usb-power-supply";
+		};
+	};
+
+	gt911: ctp@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		interrupt-parent = <&aw9523b>;
+		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&aw9523b 6 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&aw9523b 5 GPIO_ACTIVE_HIGH>;
+	};
+
+	ov2640: camera@30 {
+		compatible = "ovti,ov2640";
+		reg = <0x30>;
+		pinctrl-0 = <&clk_out_pins>;
+		pinctrl-names = "default";
+		clocks = <&clk_out>;
+		clock-names = "xvclk";
+		assigned-clocks = <&clk_out>;
+		assigned-clock-rates = <24000000>;
+
+		port {
+			ov2640_ep: endpoint {
+				remote-endpoint = <&csi0_ep>;
+				bus-width = <8>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				pclk-sample = <1>;
+			};
+		};
+	};
+};
+
+&csi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&csi0_pins>;
+	packed-format;
+	status = "okay";
+
+	port {
+		csi0_ep: endpoint {
+			remote-endpoint = <&ov2640_ep>;
+			bus-width = <8>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			pclk-sample = <1>;
+		};
+	};
+};
+
+&lradc {
+	vref-supply = <&reg_vcc3v3>;
+	status = "okay";
+
+	button@200 {
+		label = "UserKey1";
+		linux,code = <KEY_1>;
+		channel = <0>;
+		voltage = <200000>;
+	};
+
+	button@400 {
+		label = "UserKey2";
+		linux,code = <KEY_2>;
+		channel = <0>;
+		voltage = <400000>;
+	};
+
+	button@600 {
+		label = "UserKey3";
+		linux,code = <KEY_3>;
+		channel = <0>;
+		voltage = <600000>;
+	};
+};

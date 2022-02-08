@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# Start Application....
+#
+
+MTD_VENDOR="/dev/mtdblock3"
+PATH_WORKSPACE="/tmp/workspace"
+
+start() {
+    printf "Starting Application: "
+    echo 401 > /sys/class/gpio/export
+    echo high > /sys/class/gpio/gpio401/direction
+
+    mkdir -p "${PATH_WORKSPACE}"
+    mount -t jffs2 "${MTD_VENDOR}" "${PATH_WORKSPACE}"
+    cd "${PATH_WORKSPACE}"
+    ./start.sh &
+
+    [ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+
+stop() {
+    printf "Stopping Application: "
+    echo low > /sys/class/gpio/gpio401/direction
+
+    cd "${PATH_WORKSPACE}"
+    ./stop.sh
+
+    [ $? = 0 ] && echo "OK" || echo "FAIL"
+}
+
+case "$1" in
+    start)
+    start
+    ;;
+    stop)
+    stop
+    ;;
+    restart|reload)
+    stop
+    sleep 1
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit $?
