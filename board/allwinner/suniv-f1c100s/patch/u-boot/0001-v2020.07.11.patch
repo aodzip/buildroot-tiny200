@@ -11,10 +11,11 @@
  arch/arm/dts/Makefile                         |   2 +
  arch/arm/include/asm/arch-sunxi/clock.h       |   2 +-
  arch/arm/include/asm/arch-sunxi/clock_sun6i.h |  25 +
- arch/arm/include/asm/arch-sunxi/cpu_sun4i.h   |  12 +
+ arch/arm/include/asm/arch-sunxi/cpu_sun4i.h   |  23 +-
  arch/arm/include/asm/arch-sunxi/dram.h        |   2 +
  arch/arm/include/asm/arch-sunxi/dram_suniv.h  |  47 ++
- arch/arm/include/asm/arch-sunxi/gpio.h        |   3 +
+ arch/arm/include/asm/arch-sunxi/gpio.h        |   5 +
+ arch/arm/include/asm/arch-sunxi/pwm.h         |   6 +
  arch/arm/mach-sunxi/Kconfig                   |  16 +-
  arch/arm/mach-sunxi/Makefile                  |   2 +
  arch/arm/mach-sunxi/board.c                   |  50 +-
@@ -44,7 +45,7 @@
  include/configs/sunxi-common.h                |  77 ++-
  include/dt-bindings/clock/suniv-ccu.h         |  69 +++
  include/dt-bindings/reset/suniv-ccu.h         |  38 ++
- 45 files changed, 1713 insertions(+), 86 deletions(-)
+ 46 files changed, 1731 insertions(+), 87 deletions(-)
  create mode 100644 arch/arm/cpu/arm926ejs/sunxi/Makefile
  create mode 100644 arch/arm/cpu/arm926ejs/sunxi/config.mk
  create mode 100644 arch/arm/cpu/arm926ejs/sunxi/fel_utils.S
@@ -553,7 +554,7 @@ index ee387127f3..5ecdf58bd5 100644
  #define APB2_RESET_UART_SHIFT		(16)
  #define APB2_RESET_UART_MASK		(0xff << APB2_RESET_UART_SHIFT)
 diff --git a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
-index 02ce73954d..a9461e9d2d 100644
+index 02ce73954d..12b22c4774 100644
 --- a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
 +++ b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
 @@ -42,7 +42,11 @@
@@ -568,7 +569,32 @@ index 02ce73954d..a9461e9d2d 100644
  #define SUNXI_MMC3_BASE			0x01c12000
  #ifdef CONFIG_SUNXI_GEN_SUN4I
  #define SUNXI_USB0_BASE			0x01c13000
-@@ -111,6 +115,12 @@ defined(CONFIG_MACH_SUN50I)
+@@ -82,15 +86,23 @@
+ #define SUNXI_INTC_BASE			0x01c20400
+ #define SUNXI_PIO_BASE			0x01c20800
+ #define SUNXI_TIMER_BASE		0x01c20c00
+-#ifndef CONFIG_SUNXI_GEN_SUN6I
++
++#ifdef CONFIG_MACH_SUNIV
++#define SUNXI_PWM_BASE			0x01c21000
++#elif !defined CONFIG_SUNXI_GEN_SUN6I
+ #define SUNXI_PWM_BASE			0x01c20e00
+ #endif
++#ifndef CONFIG_MACH_SUNIV
+ #define SUNXI_SPDIF_BASE		0x01c21000
++#endif
++
++#ifndef CONFIG_MACH_SUNIV
+ #ifdef CONFIG_SUNXI_GEN_SUN6I
+ #define SUNXI_PWM_BASE			0x01c21400
+ #else
+ #define SUNXI_AC97_BASE			0x01c21400
+ #endif
++#endif
+ #define SUNXI_IR0_BASE			0x01c21800
+ #define SUNXI_IR1_BASE			0x01c21c00
+ 
+@@ -111,6 +123,12 @@ defined(CONFIG_MACH_SUN50I)
  
  #define SUNXI_SJTAG_BASE		0x01c23c00
  
@@ -581,7 +607,7 @@ index 02ce73954d..a9461e9d2d 100644
  #define SUNXI_TP_BASE			0x01c25000
  #define SUNXI_PMU_BASE			0x01c25400
  
-@@ -118,9 +128,11 @@ defined(CONFIG_MACH_SUN50I)
+@@ -118,9 +136,11 @@ defined(CONFIG_MACH_SUN50I)
  #define SUNXI_CPUCFG_BASE		0x01c25c00
  #endif
  
@@ -593,6 +619,11 @@ index 02ce73954d..a9461e9d2d 100644
  #define SUNXI_UART3_BASE		0x01c28c00
  #define SUNXI_UART4_BASE		0x01c29000
  #define SUNXI_UART5_BASE		0x01c29400
+@@ -218,3 +238,4 @@ int sunxi_get_sid(unsigned int *sid);
+ #endif /* __ASSEMBLY__ */
+ 
+ #endif /* _SUNXI_CPU_SUN4I_H */
++
 diff --git a/arch/arm/include/asm/arch-sunxi/dram.h b/arch/arm/include/asm/arch-sunxi/dram.h
 index 8002b7efdc..523dd71cc9 100644
 --- a/arch/arm/include/asm/arch-sunxi/dram.h
@@ -660,7 +691,7 @@ index 0000000000..088eb5b9eb
 +#define DRAM_MCR11			(0x12c)
 +#define DRAM_BWCR			(0x140)
 diff --git a/arch/arm/include/asm/arch-sunxi/gpio.h b/arch/arm/include/asm/arch-sunxi/gpio.h
-index a646ea6a3c..030fce7fa9 100644
+index a646ea6a3c..50392dac68 100644
 --- a/arch/arm/include/asm/arch-sunxi/gpio.h
 +++ b/arch/arm/include/asm/arch-sunxi/gpio.h
 @@ -169,6 +169,7 @@ enum sunxi_gpio_number {
@@ -671,15 +702,41 @@ index a646ea6a3c..030fce7fa9 100644
  #define SUN6I_GPC_SDC3		4
  #define SUN50I_GPC_SPI0		4
  
-@@ -177,6 +178,8 @@ enum sunxi_gpio_number {
+@@ -177,6 +178,9 @@ enum sunxi_gpio_number {
  #define SUNXI_GPD_LVDS0		3
  #define SUNXI_GPD_PWM		2
  
++#define SUNIV_GPE_PWM0		4
 +#define SUNIV_GPE_UART0		5
 +#define SUNIV_GPE_UART2		3
  #define SUN5I_GPE_SDC2		3
  #define SUN8I_GPE_TWI2		3
  #define SUN50I_GPE_TWI2		3
+@@ -249,3 +253,4 @@ static inline int axp_gpio_init(void) { return 0; }
+ #endif
+ 
+ #endif /* _SUNXI_GPIO_H */
++
+diff --git a/arch/arm/include/asm/arch-sunxi/pwm.h b/arch/arm/include/asm/arch-sunxi/pwm.h
+index b89bddd2e8..00c5a6ec49 100644
+--- a/arch/arm/include/asm/arch-sunxi/pwm.h
++++ b/arch/arm/include/asm/arch-sunxi/pwm.h
+@@ -41,9 +41,15 @@
+ #define SUNXI_PWM_MUX			SUN8I_GPH_PWM
+ #endif
+ 
++#if defined CONFIG_MACH_SUNIV
++#define SUNXI_PWM_PIN0			SUNXI_GPE(12)
++#define SUNXI_PWM_MUX			SUNIV_GPE_PWM0
++#endif
++
+ struct sunxi_pwm {
+ 	u32 ctrl;
+ 	u32 ch0_period;
+ };
+ 
+ #endif
++
 diff --git a/arch/arm/mach-sunxi/Kconfig b/arch/arm/mach-sunxi/Kconfig
 index be0822bfb7..015fd59a62 100644
 --- a/arch/arm/mach-sunxi/Kconfig
@@ -2815,5 +2872,4 @@ index 0000000000..a40772c5c6
 +
 +#endif /* _DT_BINDINGS_RST_SUNIV_H_ */
 -- 
-2.17.1
-
+2.25.1
