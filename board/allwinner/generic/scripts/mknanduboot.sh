@@ -14,8 +14,8 @@ set -e
 OUTPUT="$2"
 UBOOT="$1"
 
-TOOLCHECK=$(od --help | grep 'endia')
-if [ "$TOOLCHECK" == "" ]; then
+TOOLCHECK=$(od --help | grep 'endia'; echo $?)
+if [ "$TOOLCHECK" == "1" ]; then
 	echo "od cmd is too old not support endia"
 	exit -1
 fi
