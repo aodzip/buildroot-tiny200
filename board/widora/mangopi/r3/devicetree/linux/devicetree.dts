@@ -13,7 +13,8 @@
 		#size-cells = <1>;
 		ranges;
 
-		bootargs = "console=ttyS0,115200 rootwait init=/preinit root=/dev/mtdblock2 rootfstype=squashfs overlayfsdev=/dev/mtdblock3";
+		//bootargs = "console=ttyS0,115200 rootwait init=/preinit root=/dev/mtdblock2 rootfstype=squashfs overlayfsdev=/dev/mtdblock3";
+		bootargs = "console=ttyS0,115200 rootwait init=/preinit root=/dev/mmcblk0p3 rootfstype=ext4 ";
 
 		simplefb_lcd: framebuffer-lcd0 {
 			compatible = "allwinner,simple-framebuffer",
