@@ -21,8 +21,8 @@ CONFIG_USE_DEFAULT_ENV_FILE=y
 CONFIG_DEFAULT_ENV_FILE="../../../board/allwinner/generic/uboot.env"
 
 CONFIG_BOOTDELAY=0
-
-CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:18,pclk_khz:30000,le:16,ri:209,up:22,lo:22,hs:30,vs:1,sync:0,vmode:0"
+CONFIG_VIDEO_LCD_MODE="x:1024,y:600,depth:18,pclk_khz:41000,le:160,ri:160,up:23,lo:12,hs:30,vs:3,sync:3,vmode:0"
+#CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:18,pclk_khz:30000,le:16,ri:209,up:22,lo:22,hs:30,vs:1,sync:0,vmode:0"
 CONFIG_BOOTCOMMAND="setenv lcd_bl_pin 134; run distro_bootcmd;"
 
 CONFIG_NET=n
