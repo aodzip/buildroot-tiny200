@@ -4,7 +4,7 @@ UBOOT_OFFSET=32 #0x800/1024
 PAGESIZE=2048
 BLOCKSIZE=128
 
-set -e
+#set -e
 [ $# -eq 2 ] || {
     echo "SYNTAX: $0 <u-boot-with-spl image> <outputfile> "
     echo "Given: $@"
@@ -14,11 +14,15 @@ set -e
 OUTPUT="$2"
 UBOOT="$1"
 
+echo "u1"
+echo $UBOOT
 TOOLCHECK=$(od --help | grep 'endia')
+echo "u2"
 if [ "$TOOLCHECK" == "" ]; then
 	echo "od cmd is too old not support endia"
-	exit -1
+	#exit -1
 fi
+echo "u2"
 # SPL-Size is an uint32 at 16 bytes offset contained in the SPL header
 #uboot header offset head in include/configs/sunxi-common.h CONFIG_SYS_SPI_U_BOOT_OFFS so spl max size is CONFIG_SYS_SPI_U_BOOT_OFFS
 #f1c100s modify CONFIG_SYS_SPI_U_BOOT_OFFS to 0xd000(52K)
