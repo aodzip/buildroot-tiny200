@@ -1,3 +1,29 @@
+# buildroot for usb display for F1C200s demo 
+20230705: 
+Experience version Internal testing only. 
+
+how to build:
+1. decrypt patch file
+
+cd board/allwinner/suniv-f1c100s/patch/linux
+cat 0019-add-usb-display-demo-src.patch.des3.udisp_xfz1986 | openssl des3 -d -k pass_word > 0019-add-usb-display-demo-src.patch
+
+2. just follow below step to get img
+
+3. run it:
+connect f1c200s serial in shell.
+
+echo >  /sys/kernel/config/usb_gadget/g1/UDC
+cd lib/modules/5.4.99/kernel/drivers/usb/gadget/function
+insmod jdec.ko 
+insmod udisp_xfz1986_demo.ko
+/opt/devmset 0x1c20000 0x90001f00 1
+/opt/devmd 0x1c20000
+
+plugin usb to windows, install windows driver, maybe need change resolution for display.
+
+
+
 # Buildroot Package for Allwinner SIPs
 Opensource development package for Allwinner F1C100s & F1C200s
 
