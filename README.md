@@ -14,13 +14,23 @@ cat 0019-add-usb-display-demo-src.patch.des3.udisp_xfz1986 | openssl des3 -d -k 
 connect f1c200s serial in shell.
 
 echo >  /sys/kernel/config/usb_gadget/g1/UDC
+
 cd lib/modules/5.4.99/kernel/drivers/usb/gadget/function
+
 insmod jdec.ko 
+
 insmod udisp_xfz1986_demo.ko
+
 /opt/devmset 0x1c20000 0x90001f00 1
+
 /opt/devmd 0x1c20000
 
 plugin usb to windows, install windows driver, maybe need change resolution for display.
+
+# refer project or web pages, thanks for these.
+1. https://github.com/aodzip/buildroot-tiny200
+2. https://whycan.com/t_8114.html   Baremetal hardware JPEG-decoder example (F1C100S)
+3. https://whycan.com/t_5429.html   f1c100s成功运行jpeg硬解码demo，但输出还是有问题
 
 
 
