@@ -1,4 +1,5 @@
-# buildroot for usb display for F1C200s demo 
+
+## buildroot for usb display for F1C200s demo 
 20230705: 
 Experience version Internal testing only. 
 
@@ -25,6 +26,15 @@ insmod udisp_xfz1986_demo.ko
 
 /opt/devmd 0x1c20000
 
+# windows driver install / windows驱动安装
+1. 预编译好的驱动包，https://github.com/chuanjinpang/windows_win10_idd_xfz1986_usb_display_drv_f1c200s/tree/master/test_drv
+2. 也可以自己使用vs2015安装，
+## 安装方法 
+1. 因为没有签名，使用的测试版本，需要用管理员权限打开test sign mode. 命令：
+   bcdedit /set testsigning on
+   然后重启电脑，生效后，桌面右下角会有test mode的水印信息。
+3. 在设备管理器中，找到我们的设备，需要把设备插入，然后查找驱动路径。
+
 plugin usb to windows, install windows driver, maybe need change resolution for display.
 
 # refer project or web pages, thanks for these.
@@ -32,7 +42,10 @@ plugin usb to windows, install windows driver, maybe need change resolution for 
 2. https://whycan.com/t_8114.html   Baremetal hardware JPEG-decoder example (F1C100S)
 3. https://whycan.com/t_5429.html   f1c100s成功运行jpeg硬解码demo，但输出还是有问题
 
+## 重要说明:
+当前有一个严重的问题， 硬解jpg数据时会有大概1%的概率会出错，生成屏幕闪烁一下，如上图。 这应该是和USB传输相关，当USB不工作时，没有发现硬解出错的问题。
 
+解决方案： 1.找全志支持解决。 2.workaround 使用直接传输rgb565, VGA 640*480 能30fps.
 
 # Buildroot Package for Allwinner SIPs
 Opensource development package for Allwinner F1C100s & F1C200s
